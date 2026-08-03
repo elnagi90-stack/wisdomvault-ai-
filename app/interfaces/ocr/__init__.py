@@ -1,0 +1,1 @@
+"""OCR interface abstractions."""

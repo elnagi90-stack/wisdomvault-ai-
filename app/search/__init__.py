@@ -1,0 +1,1 @@
+"""Search-related application components."""

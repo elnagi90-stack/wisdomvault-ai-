@@ -1,0 +1,93 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wisdomvault-ai"
+version = "0.1.0"
+description = "Personal Knowledge Management Platform with AI"
+readme = "README.md"
+requires-python = ">=3.13"
+license = "MIT"
+
+authors = [
+    { name = "Islam H. Elnagi" }
+]
+
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-telegram-bot[job-queue]>=22.0",
+    "sqlalchemy>=2.0",
+    "alembic>=1.16",
+    "psycopg[binary]>=3.2",
+    "pydantic>=2.11",
+    "pydantic-settings>=2.10",
+    "python-dotenv>=1.1",
+    "apscheduler>=3.11",
+    "structlog>=25.4",
+    "httpx>=0.28",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4",
+    "pytest-cov>=6.2",
+    "ruff>=0.12",
+    "black>=25.1",
+    "isort>=6.0",
+    "mypy>=1.17",
+    "pre-commit>=4.2",
+]
+
+ai = [
+    "openai>=1.99",
+    "sentence-transformers>=5.0",
+    "pgvector>=0.4",
+]
+
+ocr = [
+    "pillow>=11.3",
+    "easyocr>=1.7",
+]
+
+anki = [
+    "genanki>=0.13",
+]
+
+[tool.setuptools]
+packages = ["app"]
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+]
+
+ignore = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unused_configs = true
+ignore_missing_imports = true

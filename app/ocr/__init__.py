@@ -1,0 +1,1 @@
+"""OCR-related application components."""

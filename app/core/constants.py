@@ -1,0 +1,3 @@
+APP_NAME = "wisdomvault-ai"
+DEFAULT_PAGE_SIZE = 20
+MAX_UPLOAD_SIZE_MB = 20
