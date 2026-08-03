@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, ValidationError, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, EnvSettingsSource, PydanticBaseSettingsSource, SettingsConfigDict
 
 
 class AppEnv(StrEnum):
@@ -42,6 +42,15 @@ class AiProvider(StrEnum):
     GEMINI = "gemini"
     CLAUDE = "claude"
     OLLAMA = "ollama"
+
+
+class CustomEnvSettingsSource(EnvSettingsSource):
+    def decode_complex_value(self, field_name: str, field: object, value: object) -> object:
+        if field_name == "allowed_origins" and isinstance(value, str):
+            if not value:
+                return []
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return super().decode_complex_value(field_name, field, value)
 
 
 class Settings(BaseSettings):
@@ -81,6 +90,13 @@ class Settings(BaseSettings):
 
     ai_provider: AiProvider = Field(default=AiProvider.OPENAI)
 
+    # CORS configuration
+    cors_allow_all: bool = Field(default=True)
+    allowed_origins: list[str] = Field(default_factory=list)
+
+    # Optional API key for protecting write endpoints (leave empty to disable)
+    api_key: str = Field(default="")
+
     @field_validator("app_env", mode="before")
     @classmethod
     def validate_app_env(cls, value: object) -> object:
@@ -103,6 +119,33 @@ class Settings(BaseSettings):
         if value == "YOUR_BOT_TOKEN_HERE":
             return ""
         return value
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, value: object) -> list[str]:
+        if isinstance(value, str):
+            if not value:
+                return []
+            return [item.strip() for item in value.split(",") if item.strip()]
+        if isinstance(value, (list, tuple)):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return []
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            CustomEnvSettingsSource(settings_cls=settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
     @property
     def is_development(self) -> bool:

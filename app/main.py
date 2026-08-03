@@ -1,4 +1,5 @@
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from app.core.config import settings
@@ -16,6 +17,19 @@ from app.services.storage_service import LocalStorageService
 
 app = FastAPI(title=settings.app_name)
 
+if settings.cors_allow_all:
+    allow_origins = ["*"]
+else:
+    allow_origins = settings.allowed_origins or []
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 engine = create_engine_from_settings(settings)
 init_db(engine)
 session_factory = build_session_factory(engine)
@@ -24,6 +38,12 @@ knowledge_service = KnowledgeService(repository=knowledge_repository)
 storage_service = LocalStorageService(base_path=settings.storage_path / "uploads")
 ai_service = AiService()
 ocr_service = OcrService()
+
+
+def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
+    if settings.api_key:
+        if not x_api_key or x_api_key != settings.api_key:
+            raise HTTPException(status_code=401, detail="Missing or invalid X-API-KEY header")
 
 
 @app.get("/")
@@ -47,6 +67,7 @@ def create_knowledge_entry(
     title: str | None = Query(default=None),
     content: str | None = Query(default=None),
     service=Depends(get_knowledge_service),
+    _=Depends(require_api_key),
 ) -> KnowledgeEntryResponse:
     if payload is not None:
         title_value = payload.title
@@ -75,7 +96,7 @@ def search_knowledge(query: str, service=Depends(get_knowledge_service)) -> list
 
 
 @app.post("/upload")
-def upload_text(filename: str, content: str) -> dict[str, object]:
+def upload_text(filename: str, content: str, _=Depends(require_api_key)) -> dict[str, object]:
     path = storage_service.save_bytes(filename, content.encode("utf-8"))
     return {"filename": filename, "path": str(path)}
 
