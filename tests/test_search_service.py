@@ -8,7 +8,9 @@ from app.services.knowledge_service import KnowledgeService
 from app.services.search_service import SearchService
 
 
-def test_search_service_finds_relevant_entries(tmp_path: Path, monkeypatch: object) -> None:
+def test_search_service_finds_relevant_entries(
+    tmp_path: Path, monkeypatch: object
+) -> None:
     db_path = tmp_path / "knowledge.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
     monkeypatch.setenv("DATABASE_ENGINE", "sqlite")
@@ -20,7 +22,9 @@ def test_search_service_finds_relevant_entries(tmp_path: Path, monkeypatch: obje
     repository = KnowledgeRepository(session_factory=build_session_factory(engine))
     service = KnowledgeService(repository=repository)
 
-    service.create_entry(title="Python notes", content="FastAPI and SQLAlchemy patterns")
+    service.create_entry(
+        title="Python notes", content="FastAPI and SQLAlchemy patterns"
+    )
     service.create_entry(title="Travel plan", content="Book a flight to Cairo")
 
     search_service = SearchService(service)

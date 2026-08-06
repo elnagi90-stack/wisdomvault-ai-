@@ -9,7 +9,9 @@ from app.services.ocr_service import OcrService
 from app.services.storage_service import LocalStorageService
 
 
-def test_storage_and_knowledge_services_work(tmp_path: Path, monkeypatch: object) -> None:
+def test_storage_and_knowledge_services_work(
+    tmp_path: Path, monkeypatch: object
+) -> None:
     db_path = tmp_path / "knowledge.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
     monkeypatch.setenv("DATABASE_ENGINE", "sqlite")

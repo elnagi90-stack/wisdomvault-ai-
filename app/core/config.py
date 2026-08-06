@@ -5,7 +5,12 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, ValidationError, field_validator
-from pydantic_settings import BaseSettings, EnvSettingsSource, PydanticBaseSettingsSource, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    EnvSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 
 class AppEnv(StrEnum):
@@ -45,7 +50,9 @@ class AiProvider(StrEnum):
 
 
 class CustomEnvSettingsSource(EnvSettingsSource):
-    def decode_complex_value(self, field_name: str, field: object, value: object) -> object:
+    def decode_complex_value(
+        self, field_name: str, field: object, value: object
+    ) -> object:
         if field_name == "allowed_origins" and isinstance(value, str):
             if not value:
                 return []
@@ -70,7 +77,9 @@ class Settings(BaseSettings):
     database_engine: DatabaseEngine = Field(default=DatabaseEngine.SQLITE)
     database_url: str = Field(default="sqlite:///storage/database.db")
 
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(default="INFO")
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO"
+    )
 
     openai_api_key: str = Field(default="")
 
@@ -166,5 +175,5 @@ class Settings(BaseSettings):
 
 try:
     settings = Settings()
-except ValidationError as exc:  # pragma: no cover - defensive import path
+except ValidationError:  # pragma: no cover - defensive import path
     settings = Settings(_env_file=None)
