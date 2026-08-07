@@ -1,22 +1,32 @@
-from sentence_transformers import SentenceTransformer
+﻿from sentence_transformers import SentenceTransformer
+import numpy as np
 
 
 class EmbeddingService:
-    def __init__(self):
-        self.model = SentenceTransformer(
-            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-        )
+    _model = None
 
-    def encode(self, texts: list[str]):
-        return self.model.encode(
-            texts,
-            normalize_embeddings=True,
-            convert_to_numpy=True,
-        )
+    @classmethod
+    def model(cls):
+        if cls._model is None:
+            cls._model = SentenceTransformer(
+                "BAAI/bge-m3"
+            )
+        return cls._model
 
-    def encode_one(self, text: str):
-        return self.model.encode(
+    def encode_one(
+        self,
+        text: str,
+    ) -> np.ndarray:
+        return self.model().encode(
             text,
             normalize_embeddings=True,
-            convert_to_numpy=True,
+        )
+
+    def encode_many(
+        self,
+        texts: list[str],
+    ) -> np.ndarray:
+        return self.model().encode(
+            texts,
+            normalize_embeddings=True,
         )

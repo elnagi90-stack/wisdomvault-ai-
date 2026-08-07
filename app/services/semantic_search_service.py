@@ -1,41 +1,70 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 
+import faiss
+import numpy as np
+
 from app.ai.embedding_service import EmbeddingService
-from app.ai.vector_store import VectorStore
 from app.repositories.quote_repository import QuoteRepository
 
 
 class SemanticSearchService:
-    def __init__(self, repository: QuoteRepository):
+    def __init__(
+        self,
+        repository: QuoteRepository,
+    ) -> None:
         self.repository = repository
-        self.vector_store = VectorStore()
-        self._loaded = False
+        self.embedding_service = EmbeddingService()
 
-    def _build_index(self):
-        if self._loaded:
-            return
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+    ):
+        quotes = self.repository.list_all(limit=100000)
 
-        quotes = self.repository.list_all()
+        if not quotes:
+            return []
+
+        vectors = []
+        valid_quotes = []
 
         for quote in quotes:
-            if not quote.embedding:
-                continue
+            if quote.embedding:
+                vectors.append(json.loads(quote.embedding))
+                valid_quotes.append(quote)
 
-            vector = json.loads(quote.embedding)
-            self.vector_store.add(vector, quote.id)
+        if not vectors:
+            return []
 
-        self._loaded = True
-
-    def search(self, text: str, top_k: int = 5):
-        self._build_index()
-
-        vector = EmbeddingService().encode_one(text)
-
-        results = self.vector_store.search(
-            vector,
-            k=top_k,
+        matrix = np.array(
+            vectors,
+            dtype="float32",
         )
+
+        index = faiss.IndexFlatIP(
+            matrix.shape[1],
+        )
+
+        index.add(matrix)
+
+        query_vector = self.embedding_service.encode_one(query)
+
+        query_vector = np.array(
+            [query_vector],
+            dtype="float32",
+        )
+
+        _, indices = index.search(
+            query_vector,
+            min(top_k, len(valid_quotes)),
+        )
+
+        results = []
+
+        for idx in indices[0]:
+            if idx != -1:
+                results.append(valid_quotes[idx])
 
         return results

@@ -3,7 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.dependencies import get_quote_service
-from app.schemas.quote import QuoteCreate, QuoteResponse
+from app.schemas.quote import (
+    QuoteCreate,
+    QuoteResponse,
+    QuoteUpdate,
+)
 from app.services.quote_service import QuoteService
 from app.services.semantic_search_service import SemanticSearchService
 
@@ -31,21 +35,28 @@ def list_quotes(
 @router.post(
     "",
     response_model=QuoteResponse,
+    status_code=201,
 )
 def create_quote(
     payload: QuoteCreate,
     service: QuoteService = Depends(get_quote_service),
 ):
-    return service.create_quote(
-        text=payload.text,
-        book_id=payload.book_id,
-        page_number=payload.page_number,
-        chapter=payload.chapter,
-        language=payload.language,
-        notes=payload.notes,
-        rating=payload.rating,
-        is_favorite=payload.is_favorite,
-    )
+    try:
+        return service.create_quote(
+            text=payload.text,
+            book_id=payload.book_id,
+            page_number=payload.page_number,
+            chapter=payload.chapter,
+            language=payload.language,
+            notes=payload.notes,
+            rating=payload.rating,
+            is_favorite=payload.is_favorite,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
 
 
 @router.get(
@@ -114,6 +125,17 @@ def search_quotes(
 
 
 @router.get(
+    "/semantic-search",
+)
+def semantic_search(
+    query: str = Query(...),
+    service: QuoteService = Depends(get_quote_service),
+):
+    semantic = SemanticSearchService(service.repository)
+    return semantic.search(query)
+
+
+@router.get(
     "/{quote_id}",
     response_model=QuoteResponse,
 )
@@ -122,6 +144,35 @@ def get_quote(
     service: QuoteService = Depends(get_quote_service),
 ):
     quote = service.get_quote(quote_id)
+
+    if quote is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Quote not found",
+        )
+
+    return quote
+
+
+@router.put(
+    "/{quote_id}",
+    response_model=QuoteResponse,
+)
+def update_quote(
+    quote_id: str,
+    payload: QuoteUpdate,
+    service: QuoteService = Depends(get_quote_service),
+):
+    try:
+        quote = service.update_quote(
+            quote_id,
+            payload,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
 
     if quote is None:
         raise HTTPException(
@@ -150,13 +201,3 @@ def delete_quote(
     return {
         "success": True,
     }
-
-
-@router.get("/semantic-search")
-def semantic_search(
-    query: str = Query(...),
-    service: QuoteService = Depends(get_quote_service),
-):
-    semantic = SemanticSearchService(service.repository)
-
-    return semantic.search(query)

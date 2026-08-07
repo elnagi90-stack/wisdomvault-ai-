@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Annotated
 
@@ -8,11 +8,13 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.repositories.author_repository import AuthorRepository
 from app.repositories.book_repository import BookRepository
+from app.repositories.category_repository import CategoryRepository
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.repositories.quote_repository import QuoteRepository
 from app.repositories.tag_repository import TagRepository
 from app.services.author_service import AuthorService
 from app.services.book_service import BookService
+from app.services.category_service import CategoryService
 from app.services.knowledge_service import KnowledgeService
 from app.services.quote_service import QuoteService
 from app.services.tag_service import TagService
@@ -52,6 +54,7 @@ def get_author_service(
     repository = AuthorRepository(
         session_factory=lambda: session,
     )
+
     return AuthorService(
         repository=repository,
     )
@@ -63,6 +66,7 @@ def get_book_service(
     repository = BookRepository(
         session_factory=lambda: session,
     )
+
     return BookService(
         repository=repository,
     )
@@ -74,7 +78,20 @@ def get_tag_service(
     repository = TagRepository(
         session_factory=lambda: session,
     )
+
     return TagService(
+        repository=repository,
+    )
+
+
+def get_category_service(
+    session: Session = Depends(get_db),
+) -> CategoryService:
+    repository = CategoryRepository(
+        session_factory=lambda: session,
+    )
+
+    return CategoryService(
         repository=repository,
     )
 

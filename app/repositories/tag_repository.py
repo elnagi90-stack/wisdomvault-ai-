@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.tag import Tag
 
 
 class SupportsSession(Protocol):
-    def __call__(self) -> Session: ...
+    def __call__(self) -> Session:
+        ...
 
 
 class TagRepository:
@@ -37,12 +38,24 @@ class TagRepository:
             stmt = select(Tag).order_by(Tag.name)
             return list(session.scalars(stmt).all())
 
-    def update(self, tag: Tag) -> Tag:
+    def update(
+        self,
+        tag_id: str,
+        **fields,
+    ) -> Tag | None:
         with self._session_factory() as session:
-            merged = session.merge(tag)
+            tag = session.get(Tag, tag_id)
+
+            if tag is None:
+                return None
+
+            for key, value in fields.items():
+                setattr(tag, key, value)
+
             session.commit()
-            session.refresh(merged)
-            return merged
+            session.refresh(tag)
+
+            return tag
 
     def delete(self, tag_id: str) -> bool:
         with self._session_factory() as session:
@@ -53,4 +66,19 @@ class TagRepository:
 
             session.delete(tag)
             session.commit()
+
             return True
+
+    def search(
+        self,
+        keyword: str,
+    ) -> list[Tag]:
+        with self._session_factory() as session:
+            stmt = select(Tag).where(
+                or_(
+                    Tag.name.ilike(f"%{keyword}%"),
+                    Tag.color.ilike(f"%{keyword}%"),
+                )
+            )
+
+            return list(session.scalars(stmt).all())

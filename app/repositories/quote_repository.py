@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import random
 from typing import Protocol
@@ -129,6 +129,20 @@ class QuoteRepository:
             )
 
             return session.scalar(stmt)
+
+    def set_favorite(self, quote_id: str, is_favorite: bool) -> Quote | None:
+
+        with self._session_factory() as session:
+            quote = session.get(Quote, quote_id)
+
+            if quote is None:
+                return None
+
+            quote.is_favorite = is_favorite
+            session.commit()
+            session.refresh(quote)
+
+            return quote
 
     def delete(self, quote_id: str) -> bool:
 

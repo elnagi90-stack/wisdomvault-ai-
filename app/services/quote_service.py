@@ -1,13 +1,44 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 
-from app.ai.embedding_service import EmbeddingService
 from app.models.quote import Quote
 from app.repositories.quote_repository import (
     QuoteRepository,
     SupportsSession,
 )
+
+_embedding_service = None
+_embedding_unavailable = False
+
+
+def _get_embedding_vector(text: str) -> str | None:
+    """Best-effort embedding lookup.
+
+    The embedding stack (sentence-transformers) is an optional extra.
+    If it isn't installed, or fails to load for any reason, quotes are
+    still created successfully with embedding left empty rather than
+    crashing the whole request.
+    """
+    global _embedding_service, _embedding_unavailable
+
+    if _embedding_unavailable:
+        return None
+
+    if _embedding_service is None:
+        try:
+            from app.ai.embedding_service import EmbeddingService
+
+            _embedding_service = EmbeddingService()
+        except Exception:
+            _embedding_unavailable = True
+            return None
+
+    try:
+        vector = _embedding_service.encode_one(text)
+        return json.dumps(vector.tolist())
+    except Exception:
+        return None
 
 
 class QuoteService:
@@ -49,8 +80,7 @@ class QuoteService:
             is_favorite=is_favorite,
         )
 
-        vector = EmbeddingService().encode_one(text)
-        quote.embedding = json.dumps(vector.tolist())
+        quote.embedding = _get_embedding_vector(text)
 
         return self.repository.create(quote)
 
@@ -107,3 +137,10 @@ class QuoteService:
         tag_name: str,
     ) -> list[Quote]:
         return self.repository.by_tag(tag_name)
+
+    def set_favorite(
+        self,
+        quote_id: str,
+        is_favorite: bool = True,
+    ) -> Quote | None:
+        return self.repository.set_favorite(quote_id, is_favorite)
