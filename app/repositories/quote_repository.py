@@ -144,6 +144,22 @@ class QuoteRepository:
 
             return quote
 
+    def update(self, quote_id: str, **fields) -> Quote | None:
+
+        with self._session_factory() as session:
+            quote = session.get(Quote, quote_id)
+
+            if quote is None:
+                return None
+
+            for key, value in fields.items():
+                setattr(quote, key, value)
+
+            session.commit()
+            session.refresh(quote)
+
+            return quote
+
     def delete(self, quote_id: str) -> bool:
 
         with self._session_factory() as session:

@@ -114,6 +114,32 @@ class QuoteService:
     ) -> Quote | None:
         return self.repository.get_by_id(quote_id)
 
+    def update_quote(
+        self,
+        quote_id: str,
+        payload,
+    ) -> Quote | None:
+        fields = payload.model_dump(exclude_unset=True)
+
+        if "text" in fields:
+            if not fields["text"] or not fields["text"].strip():
+                raise ValueError("Quote text cannot be empty.")
+
+            fields["text"] = fields["text"].strip()
+
+            vector = _encode(fields["text"])
+            fields["embedding"] = (
+                json.dumps(vector.tolist()) if vector is not None else None
+            )
+
+            if vector is not None:
+                _index_in_faiss(quote_id, vector)
+
+        if not fields:
+            return self.repository.get_by_id(quote_id)
+
+        return self.repository.update(quote_id, **fields)
+
     def delete_quote(
         self,
         quote_id: str,
