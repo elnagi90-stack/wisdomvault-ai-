@@ -12,13 +12,12 @@ _embedding_service = None
 _embedding_unavailable = False
 
 
-def _get_embedding_vector(text: str) -> str | None:
+def _encode(text: str):
     """Best-effort embedding lookup.
 
     The embedding stack (sentence-transformers) is an optional extra.
-    If it isn't installed, or fails to load for any reason, quotes are
-    still created successfully with embedding left empty rather than
-    crashing the whole request.
+    If it isn't installed, or fails to load for any reason, this
+    returns None rather than crashing quote creation.
     """
     global _embedding_service, _embedding_unavailable
 
@@ -35,10 +34,19 @@ def _get_embedding_vector(text: str) -> str | None:
             return None
 
     try:
-        vector = _embedding_service.encode_one(text)
-        return json.dumps(vector.tolist())
+        return _embedding_service.encode_one(text)
     except Exception:
         return None
+
+
+def _index_in_faiss(quote_id: str, vector) -> None:
+    """Best-effort FAISS indexing. Never blocks quote creation."""
+    try:
+        from app.vector.faiss_manager import FaissManager
+
+        FaissManager().add(quote_id, vector)
+    except Exception:
+        pass
 
 
 class QuoteService:
@@ -80,9 +88,15 @@ class QuoteService:
             is_favorite=is_favorite,
         )
 
-        quote.embedding = _get_embedding_vector(text)
+        vector = _encode(text)
+        quote.embedding = json.dumps(vector.tolist()) if vector is not None else None
 
-        return self.repository.create(quote)
+        quote = self.repository.create(quote)
+
+        if vector is not None:
+            _index_in_faiss(quote.id, vector)
+
+        return quote
 
     def list_quotes(
         self,

@@ -1,7 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.ai.semantic_search_service import SemanticSearchService
 from app.core.dependencies import get_quote_service
 from app.schemas.quote import (
     QuoteCreate,
@@ -9,7 +10,6 @@ from app.schemas.quote import (
     QuoteUpdate,
 )
 from app.services.quote_service import QuoteService
-from app.services.semantic_search_service import SemanticSearchService
 
 router = APIRouter(
     prefix="/quotes",
@@ -129,10 +129,19 @@ def search_quotes(
 )
 def semantic_search(
     query: str = Query(...),
+    k: int = Query(default=5, ge=1, le=50),
     service: QuoteService = Depends(get_quote_service),
 ):
     semantic = SemanticSearchService(service.repository)
-    return semantic.search(query)
+    results = semantic.search(query, k=k)
+
+    return [
+        {
+            "score": item["score"],
+            "quote": QuoteResponse.model_validate(item["quote"]),
+        }
+        for item in results
+    ]
 
 
 @router.get(
