@@ -119,3 +119,6 @@ storage/exports/
 !storage/books/.gitkeep
 !storage/temp/.gitkeep
 !storage/exports/.gitkeep
+
+storage/*.index
+storage/quotes_ids.json
