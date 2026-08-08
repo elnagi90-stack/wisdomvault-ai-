@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 from app.schemas.web_search.quote import WebQuoteResult
 from app.services.web_search.service import WebSearchService
+from app.services.web_search.metadata.extractor import PageMetadata
 
 
 def _provider(*results: WebQuoteResult) -> Mock:
@@ -211,3 +212,52 @@ def test_search_passes_query_to_ranker() -> None:
 
     assert call.kwargs["query"] == "meaningful quote"
     assert call.kwargs["limit"] == 5
+
+def test_search_uses_page_metadata_for_extracted_quote() -> None:
+    provider = _provider(
+        WebQuoteResult(
+            text="A search snippet",
+            author=None,
+            book=None,
+            source="Google Search",
+            url="https://example.com/quote",
+        )
+    )
+
+    service = WebSearchService(providers=[provider])
+
+    service.page_extractor.extract = Mock(
+        return_value='"The important thing is to never stop learning."'
+    )
+
+    service.quote_extractor.extract = Mock(
+        return_value=[
+            "The important thing is to never stop learning."
+        ]
+    )
+
+    service.metadata_extractor.extract = Mock(
+        return_value=PageMetadata(
+            title="Great Quotes from The Alchemist",
+            author="Paulo Coelho",
+            book="The Alchemist",
+        )
+    )
+
+    service.ranker.rank = Mock(
+        side_effect=lambda query, results, limit: results[:limit]
+    )
+
+    results = service.search(
+        query="learning",
+        limit=10,
+    )
+
+    assert len(results) == 1
+    assert results[0].text == (
+        "The important thing is to never stop learning."
+    )
+    assert results[0].author == "Paulo Coelho"
+    assert results[0].book == "The Alchemist"
+    assert results[0].source == "Google Search"
+    assert results[0].url == "https://example.com/quote"

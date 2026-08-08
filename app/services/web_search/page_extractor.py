@@ -1,18 +1,25 @@
 ﻿from __future__ import annotations
 
+from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
 
+@dataclass(frozen=True)
+class WebPageContent:
+    html: str
+    text: str
+
+
 class WebPageExtractor:
     """
-    Fetch and extract readable text from a web page.
+    Fetch and extract readable content from a web page.
 
-    This class deliberately does not try to identify quotes yet.
-    Its only responsibility is:
-        URL -> cleaned page text
+    Returns both:
+        - original HTML
+        - cleaned readable text
     """
 
     def __init__(self) -> None:
@@ -25,26 +32,27 @@ class WebPageExtractor:
             "Accept-Language": "en-US,en;q=0.9",
         }
 
-    def extract(
+    def extract_content(
         self,
         url: str,
         max_chars: int = 100_000,
-    ) -> str:
+    ) -> WebPageContent | None:
+
         url = url.strip()
 
         if not url:
-            return ""
+            return None
 
         parsed = urlparse(url)
 
         if parsed.scheme not in {"http", "https"}:
-            return ""
+            return None
 
         if not parsed.netloc:
-            return ""
+            return None
 
         if max_chars < 1:
-            return ""
+            return None
 
         try:
             response = requests.get(
@@ -54,15 +62,18 @@ class WebPageExtractor:
             )
             response.raise_for_status()
         except requests.RequestException:
-            return ""
+            return None
+
+        html = response.text
+
+        if not html:
+            return None
 
         soup = BeautifulSoup(
-            response.text,
+            html,
             "html.parser",
         )
 
-        # Remove elements that normally contain navigation,
-        # scripts, styling, advertisements, or page metadata.
         for element in soup.select(
             "script, style, noscript, svg, "
             "nav, header, footer, aside, "
@@ -70,7 +81,6 @@ class WebPageExtractor:
         ):
             element.decompose()
 
-        # Prefer the main article/content area when available.
         content = (
             soup.select_one("article")
             or soup.select_one("main")
@@ -79,17 +89,35 @@ class WebPageExtractor:
         )
 
         if content is None:
-            return ""
+            return None
 
         text = content.get_text(
             " ",
             strip=True,
         )
 
-        # Normalize excessive whitespace.
         text = " ".join(text.split())
 
         if not text:
+            return None
+
+        return WebPageContent(
+            html=html,
+            text=text[:max_chars],
+        )
+
+    def extract(
+        self,
+        url: str,
+        max_chars: int = 100_000,
+    ) -> str:
+
+        content = self.extract_content(
+            url,
+            max_chars=max_chars,
+        )
+
+        if content is None:
             return ""
 
-        return text[:max_chars]
+        return content.text

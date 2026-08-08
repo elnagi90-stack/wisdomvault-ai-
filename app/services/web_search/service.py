@@ -6,9 +6,12 @@ from app.services.web_search.goodreads_provider import GoodreadsQuoteProvider
 from app.services.web_search.bing_provider import BingQuoteProvider
 from app.services.web_search.page_extractor import WebPageExtractor
 from app.services.web_search.quote_extractor import QuoteExtractor
+from app.services.web_search.metadata.extractor import PageMetadataExtractor
 from app.services.web_search.provider import WebQuoteProvider
 from app.services.web_search.ranker import WebQuoteRanker
-
+from app.services.web_search.metadata.extractor import (
+    PageMetadataExtractor,
+)
 
 class WebSearchService:
     """
@@ -31,6 +34,7 @@ class WebSearchService:
 
         self.page_extractor = WebPageExtractor()
         self.quote_extractor = QuoteExtractor()
+        self.metadata_extractor = PageMetadataExtractor()
         self.ranker = WebQuoteRanker()
 
     def search(
@@ -204,3 +208,4 @@ class WebSearchService:
             results=unique_quotes,
             limit=limit,
         )
+
