@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import uuid
 from datetime import datetime
@@ -54,6 +54,11 @@ class User(Base):
 
     notion_access_token: Mapped[str | None] = mapped_column(
         String(500),
+        nullable=True,
+    )
+
+    notion_quotes_database_id: Mapped[str | None] = mapped_column(
+        String(255),
         nullable=True,
     )
 

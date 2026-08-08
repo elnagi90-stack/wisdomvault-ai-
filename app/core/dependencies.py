@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Annotated
 
@@ -74,6 +74,14 @@ def get_knowledge_service(session: Session = Depends(get_db)) -> KnowledgeServic
 def get_user_service(session: Session = Depends(get_db)) -> UserService:
     return UserService(
         repository=UserRepository(session_factory=lambda: session)
+    )
+
+
+def get_notion_sync_service(session: Session = Depends(get_db)):
+    from app.integrations.notion.sync import NotionSyncService
+
+    return NotionSyncService(
+        repository=QuoteRepository(session_factory=lambda: session)
     )
 
 

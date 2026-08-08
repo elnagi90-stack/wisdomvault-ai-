@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import uuid
 from datetime import datetime
@@ -71,6 +71,11 @@ class Quote(Base):
 
     embedding: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
+    )
+
+    notion_page_id: Mapped[str | None] = mapped_column(
+        String(255),
         nullable=True,
     )
 

@@ -83,6 +83,13 @@ class Settings(BaseSettings):
     algorithm: str = Field(default="HS256")
     access_token_expire_minutes: int = Field(default=60)
 
+    # Notion OAuth integration
+    notion_client_id: str = Field(default="")
+    notion_client_secret: str = Field(default="")
+    notion_redirect_uri: str = Field(
+        default="http://127.0.0.1:8000/api/v1/notion/callback"
+    )
+
     ocr_engine: OcrEngine = Field(default=OcrEngine.EASYOCR)
 
     storage_driver: StorageDriver = Field(default=StorageDriver.LOCAL)
