@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -76,7 +76,14 @@ def login(
 )
 def list_users(
     service: UserService = Depends(get_user_service),
+    current_user: User = Depends(get_current_user),
 ):
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+
     return service.list_users()
 
 
