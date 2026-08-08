@@ -9,9 +9,6 @@ from app.services.web_search.quote_extractor import QuoteExtractor
 from app.services.web_search.metadata.extractor import PageMetadataExtractor
 from app.services.web_search.provider import WebQuoteProvider
 from app.services.web_search.ranker import WebQuoteRanker
-from app.services.web_search.metadata.extractor import (
-    PageMetadataExtractor,
-)
 
 class WebSearchService:
     """
@@ -162,12 +159,23 @@ class WebSearchService:
                 extracted_quotes.append(result)
                 continue
 
+            try:
+                page_metadata = self.metadata_extractor.extract(page_text)
+            except Exception:
+                page_metadata = None
+
             for quote in quotes:
                 extracted_quotes.append(
                     WebQuoteResult(
                         text=quote,
-                        author=result.author,
-                        book=result.book,
+                        author=(
+                            (page_metadata.author if page_metadata else None)
+                            or result.author
+                        ),
+                        book=(
+                            (page_metadata.book if page_metadata else None)
+                            or result.book
+                        ),
                         source=result.source,
                         url=result.url,
                         score=None,
@@ -208,4 +216,3 @@ class WebSearchService:
             results=unique_quotes,
             limit=limit,
         )
-
