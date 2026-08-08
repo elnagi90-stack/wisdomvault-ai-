@@ -122,3 +122,6 @@ storage/exports/
 
 storage/*.index
 storage/quotes_ids.json
+
+# Local backup files
+*.bak
