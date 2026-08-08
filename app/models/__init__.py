@@ -15,3 +15,4 @@ __all__ = [
     "Tag",
     "quote_tags",
 ]
+from app.models.user import User

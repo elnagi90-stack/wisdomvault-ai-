@@ -96,6 +96,39 @@ class QuoteRepository:
 
             return list(session.scalars(stmt).all())
 
+    def add_tag(self, quote_id: str, tag_id: str) -> Quote | None:
+        with self._session_factory() as session:
+            quote = session.get(Quote, quote_id)
+            tag = session.get(Tag, tag_id)
+
+            if quote is None or tag is None:
+                return None
+
+            if tag not in quote.tags:
+                quote.tags.append(tag)
+
+            session.commit()
+            session.refresh(quote)
+
+            return quote
+
+    def remove_tag(self, quote_id: str, tag_id: str) -> Quote | None:
+        with self._session_factory() as session:
+            quote = session.get(Quote, quote_id)
+
+            if quote is None:
+                return None
+
+            quote.tags = [
+                tag for tag in quote.tags
+                if tag.id != tag_id
+            ]
+
+            session.commit()
+            session.refresh(quote)
+
+            return quote
+
     def by_tag(self, tag_name: str) -> list[Quote]:
 
         with self._session_factory() as session:

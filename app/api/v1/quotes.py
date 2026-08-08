@@ -210,3 +210,49 @@ def delete_quote(
     return {
         "success": True,
     }
+
+
+@router.post(
+    "/{quote_id}/tags/{tag_id}",
+    response_model=QuoteResponse,
+)
+def add_tag_to_quote(
+    quote_id: str,
+    tag_id: str,
+    service: QuoteService = Depends(get_quote_service),
+):
+    quote = service.add_tag_to_quote(
+        quote_id=quote_id,
+        tag_id=tag_id,
+    )
+
+    if quote is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Quote or tag not found",
+        )
+
+    return quote
+
+
+@router.delete(
+    "/{quote_id}/tags/{tag_id}",
+    response_model=QuoteResponse,
+)
+def remove_tag_from_quote(
+    quote_id: str,
+    tag_id: str,
+    service: QuoteService = Depends(get_quote_service),
+):
+    quote = service.remove_tag_from_quote(
+        quote_id=quote_id,
+        tag_id=tag_id,
+    )
+
+    if quote is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Quote not found",
+        )
+
+    return quote
