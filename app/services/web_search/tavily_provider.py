@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from app.core.config import settings
 from app.schemas.web_search.quote import WebQuoteResult
 from app.services.web_search.provider import WebQuoteProvider
 
@@ -16,8 +17,8 @@ class TavilyQuoteProvider(WebQuoteProvider):
     Web quote provider backed by Tavily Search.
     """
 
-    def __init__(self) -> None:
-        self.api_key = ""
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key if api_key is not None else settings.tavily_api_key
         self.search_depth = "advanced"
 
     def search(

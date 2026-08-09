@@ -14,6 +14,26 @@ def test_tavily_returns_empty_without_api_key() -> None:
         assert provider.search("wisdom", 5) == []
 
 
+def test_tavily_reads_api_key_from_settings_by_default() -> None:
+    """A real regression guard: earlier the constructor hardcoded
+    self.api_key = "" and never consulted config/settings at all, so
+    the provider silently returned [] in production even when a real
+    Tavily key was configured in the environment."""
+    from app.core.config import Settings
+
+    with patch(
+        "app.services.web_search.tavily_provider.settings",
+        Settings(tavily_api_key="configured-key", _env_file=None),
+    ):
+        provider = TavilyQuoteProvider()
+        assert provider.api_key == "configured-key"
+
+
+def test_tavily_constructor_accepts_explicit_api_key_override() -> None:
+    provider = TavilyQuoteProvider(api_key="explicit-key")
+    assert provider.api_key == "explicit-key"
+
+
 def test_tavily_returns_empty_for_invalid_input() -> None:
     provider = TavilyQuoteProvider()
 

@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(default="INFO")
 
     openai_api_key: str = Field(default="")
+    tavily_api_key: str = Field(default="")
 
     secret_key: str = Field(default="change-this-secret-key-in-production")
     algorithm: str = Field(default="HS256")
