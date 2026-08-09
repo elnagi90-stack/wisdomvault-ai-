@@ -9,6 +9,9 @@ from app.services.web_search.quote_extractor import QuoteExtractor
 from app.services.web_search.metadata.extractor import PageMetadataExtractor
 from app.services.web_search.provider import WebQuoteProvider
 from app.services.web_search.ranker import WebQuoteRanker
+from app.services.web_search.quote_validator import QuoteValidator
+from app.services.web_search.tavily_provider import TavilyQuoteProvider
+
 
 class WebSearchService:
     """
@@ -24,6 +27,7 @@ class WebSearchService:
         providers: list[WebQuoteProvider] | None = None,
     ) -> None:
         self.providers = providers or [
+            TavilyQuoteProvider(),
             GoodreadsQuoteProvider(),
             GoogleQuoteProvider(),
             BingQuoteProvider(),
@@ -33,6 +37,7 @@ class WebSearchService:
         self.quote_extractor = QuoteExtractor()
         self.metadata_extractor = PageMetadataExtractor()
         self.ranker = WebQuoteRanker()
+        self.quote_validator = QuoteValidator()
 
     def search(
         self,
@@ -76,7 +81,6 @@ class WebSearchService:
         seen_text: set[str] = set()
 
         for result in search_results:
-
             normalized_text = " ".join(
                 result.text.lower().split()
             )
@@ -160,7 +164,9 @@ class WebSearchService:
                 continue
 
             try:
-                page_metadata = self.metadata_extractor.extract(page_text)
+                page_metadata = self.metadata_extractor.extract(
+                    page_text
+                )
             except Exception:
                 page_metadata = None
 
@@ -169,11 +175,19 @@ class WebSearchService:
                     WebQuoteResult(
                         text=quote,
                         author=(
-                            (page_metadata.author if page_metadata else None)
+                            (
+                                page_metadata.author
+                                if page_metadata
+                                else None
+                            )
                             or result.author
                         ),
                         book=(
-                            (page_metadata.book if page_metadata else None)
+                            (
+                                page_metadata.book
+                                if page_metadata
+                                else None
+                            )
                             or result.book
                         ),
                         source=result.source,
@@ -183,19 +197,21 @@ class WebSearchService:
                 )
 
         # -------------------------------------------------
-        # Deduplicate final candidates
+        # Deduplicate and validate final candidates
         # -------------------------------------------------
 
         unique_quotes: list[WebQuoteResult] = []
         seen_quotes: set[str] = set()
 
         for result in extracted_quotes:
-
             normalized = " ".join(
                 result.text.lower().split()
             )
 
             if not normalized:
+                continue
+
+            if not self.quote_validator.is_valid(result.text):
                 continue
 
             if normalized in seen_quotes:
