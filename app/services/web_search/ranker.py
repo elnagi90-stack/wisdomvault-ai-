@@ -6,14 +6,42 @@ from app.schemas.web_search.quote import WebQuoteResult
 
 class WebQuoteRanker:
     """
-    Rank web quotes by semantic similarity to a user-provided quote.
+    Rank web quotes by semantic similarity to a user-provided quote,
+    with a small source-quality adjustment.
+
+    Semantic similarity stays the dominant signal (it drives the
+    ordering in the overwhelming majority of cases); source quality
+    only breaks near-ties between otherwise similar candidates. The
+    bonus is deliberately small (<= 0.05) so it can never flip the
+    ranking between a strong semantic match from a lesser-known
+    source and a weak match from a reputable one.
 
     Uses the same BAAI/bge-m3 embedding model as the existing
     SemanticSearchService.
     """
 
+    # Small, capped bonuses — not meant to compete with semantic
+    # similarity, only to nudge otherwise-close candidates toward
+    # more reliable sources.
+    SOURCE_QUALITY_BONUS: dict[str, float] = {
+        "goodreads": 0.05,
+        "google books": 0.05,
+        "internet archive": 0.05,
+        "tavily search": 0.03,
+    }
+    DEFAULT_SOURCE_BONUS = 0.0
+
     def __init__(self) -> None:
         self.embedding = EmbeddingService()
+
+    def _source_bonus(self, source: str | None) -> float:
+        if not source:
+            return self.DEFAULT_SOURCE_BONUS
+
+        return self.SOURCE_QUALITY_BONUS.get(
+            source.strip().lower(),
+            self.DEFAULT_SOURCE_BONUS,
+        )
 
     def rank(
         self,
@@ -50,12 +78,15 @@ class WebQuoteRanker:
         ):
             # Embeddings are normalized, so dot product
             # is equivalent to cosine similarity.
-            score = float(query_vector @ quote_vector)
+            semantic_similarity = float(query_vector @ quote_vector)
+            combined_score = semantic_similarity + self._source_bonus(
+                result.source
+            )
 
             ranked.append(
                 result.model_copy(
                     update={
-                        "score": round(score, 4),
+                        "score": round(combined_score, 4),
                     }
                 )
             )
