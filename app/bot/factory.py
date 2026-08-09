@@ -1,8 +1,9 @@
 ﻿from __future__ import annotations
 
-from telegram.ext import Application, CommandHandler
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 from app.bot.commands.books import add_book, my_books
+from app.bot.commands.discover import find_similar, save_web_quote_callback
 from app.bot.commands.quotes import (
     add_quote,
     favorite_quote,
@@ -15,6 +16,7 @@ from app.database.base import create_engine_from_settings
 from app.database.session import build_session_factory
 from app.services.book_service import BookService
 from app.services.quote_service import QuoteService
+from app.services.web_search.service import WebSearchService
 
 
 async def start_command(update, context) -> None:
@@ -27,7 +29,8 @@ async def start_command(update, context) -> None:
         "/favorites — الاقتباسات المفضلة\n"
         "/favorite <id> — إضافة اقتباس للمفضلة\n"
         "/addbook <عنوان> — إضافة كتاب\n"
-        "/mybooks — كل الكتب"
+        "/mybooks — كل الكتب\n"
+        "/findsimilar <نص> — لاقي اقتباسات مشابهة من الإنترنت"
     )
 
 
@@ -48,6 +51,7 @@ def build_bot_application(
 
     application.bot_data["quote_service"] = QuoteService(session_factory=session_factory)
     application.bot_data["book_service"] = BookService(session_factory=session_factory)
+    application.bot_data["web_search_service"] = WebSearchService()
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("addquote", add_quote))
@@ -57,6 +61,10 @@ def build_bot_application(
     application.add_handler(CommandHandler("favorite", favorite_quote))
     application.add_handler(CommandHandler("addbook", add_book))
     application.add_handler(CommandHandler("mybooks", my_books))
+    application.add_handler(CommandHandler("findsimilar", find_similar))
+    application.add_handler(
+        CallbackQueryHandler(save_web_quote_callback, pattern=r"^save_web_quote:")
+    )
 
     return application
 
