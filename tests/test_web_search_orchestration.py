@@ -261,3 +261,60 @@ def test_search_uses_page_metadata_for_extracted_quote() -> None:
     assert results[0].book == "The Alchemist"
     assert results[0].source == "Google Search"
     assert results[0].url == "https://example.com/quote"
+
+def test_search_queries_providers_with_each_generated_query() -> None:
+    """Query expansion must actually reach the providers, not just
+    exist unused — this is the same class of bug as the earlier
+    PageMetadataExtractor-never-called issue."""
+    provider = _provider(
+        WebQuoteResult(text="Some canned quote", source="Goodreads")
+    )
+
+    service = WebSearchService(providers=[provider])
+    service.ranker.rank = Mock(
+        side_effect=lambda query, results, limit: results[:limit]
+    )
+
+    service.search(
+        query="The important thing is to never stop learning",
+        limit=5,
+    )
+
+    queried_terms = [
+        call.args[0] for call in provider.search.call_args_list
+    ]
+
+    # More than one distinct query string must have reached the
+    # provider — otherwise query expansion isn't really wired in.
+    assert len(set(queried_terms)) > 1
+    assert any(
+        "never stop learning" in term.lower() for term in queried_terms
+    )
+
+
+def test_search_isolates_failures_per_query_and_provider() -> None:
+    """One failing (query, provider) combination must not break the
+    rest of the search."""
+    flaky_provider = Mock()
+    flaky_provider.search.side_effect = [
+        RuntimeError("network blip"),
+        [WebQuoteResult(text="Recovered on the next query", source="Bing")],
+        RuntimeError("network blip again"),
+        [],
+        [],
+        [],
+    ]
+
+    service = WebSearchService(providers=[flaky_provider])
+    service.ranker.rank = Mock(
+        side_effect=lambda query, results, limit: results[:limit]
+    )
+
+    results = service.search(
+        query="The important thing is to never stop learning",
+        limit=5,
+    )
+
+    assert any(
+        r.text == "Recovered on the next query" for r in results
+    )

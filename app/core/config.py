@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(default="")
     tavily_api_key: str = Field(default="")
 
+    # Minimum RAW semantic similarity (cosine similarity from the
+    # embedding model, before any source-quality bonus) a web-search
+    # candidate must reach to be considered a genuine match at all.
+    # Kept intentionally moderate: real "similar in meaning" quotes
+    # (not just near-duplicates) commonly land around 0.4-0.6 with
+    # BAAI/bge-m3, while unrelated text usually falls well below 0.3.
+    min_semantic_similarity: float = Field(default=0.35)
+
     secret_key: str = Field(default="change-this-secret-key-in-production")
     algorithm: str = Field(default="HS256")
     access_token_expire_minutes: int = Field(default=60)

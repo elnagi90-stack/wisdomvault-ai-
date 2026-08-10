@@ -8,6 +8,7 @@ from app.services.web_search.page_extractor import WebPageExtractor
 from app.services.web_search.quote_extractor import QuoteExtractor
 from app.services.web_search.metadata.extractor import PageMetadataExtractor
 from app.services.web_search.provider import WebQuoteProvider
+from app.services.web_search.query_generator import QueryGenerator
 from app.services.web_search.ranker import WebQuoteRanker
 from app.services.web_search.quote_validator import QuoteValidator
 from app.services.web_search.tavily_provider import TavilyQuoteProvider
@@ -38,6 +39,7 @@ class WebSearchService:
         self.metadata_extractor = PageMetadataExtractor()
         self.ranker = WebQuoteRanker()
         self.quote_validator = QuoteValidator()
+        self.query_generator = QueryGenerator()
 
     def search(
         self,
@@ -52,22 +54,28 @@ class WebSearchService:
 
         candidate_limit = max(limit * 2, 20)
 
+        search_queries = self.query_generator.generate(query) or [query]
+
         search_results: list[WebQuoteResult] = []
 
         # -------------------------------------------------
-        # Search providers
+        # Search providers, once per generated query.
+        # Provider failures stay isolated per (query, provider) pair
+        # so one bad provider/query combination never breaks the
+        # whole search.
         # -------------------------------------------------
 
-        for provider in self.providers:
-            try:
-                provider_results = provider.search(
-                    query,
-                    candidate_limit,
-                )
-            except Exception:
-                provider_results = []
+        for search_query in search_queries:
+            for provider in self.providers:
+                try:
+                    provider_results = provider.search(
+                        search_query,
+                        candidate_limit,
+                    )
+                except Exception:
+                    provider_results = []
 
-            search_results.extend(provider_results)
+                search_results.extend(provider_results)
 
         if not search_results:
             return []

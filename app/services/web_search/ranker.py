@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from app.ai.embedding_service import EmbeddingService
+from app.core.config import settings
 from app.schemas.web_search.quote import WebQuoteResult
 
 
@@ -9,20 +10,26 @@ class WebQuoteRanker:
     Rank web quotes by semantic similarity to a user-provided quote,
     with a small source-quality adjustment.
 
-    Semantic similarity stays the dominant signal (it drives the
-    ordering in the overwhelming majority of cases); source quality
-    only breaks near-ties between otherwise similar candidates. The
-    bonus is deliberately small (<= 0.05) so it can never flip the
-    ranking between a strong semantic match from a lesser-known
-    source and a weak match from a reputable one.
+    Two concepts are kept deliberately separate:
+
+    - semantic_similarity: raw cosine similarity from the embedding
+      model. This is what the minimum-quality threshold is applied
+      to, BEFORE any source bonus.
+    - final score (stored on WebQuoteResult.score): semantic
+      similarity + a small source-quality bonus, used only to order
+      the candidates that already passed the threshold.
+
+    This ordering matters: a low-relevance quote from a reputable
+    source (e.g. Goodreads) must not be able to buy its way past the
+    similarity threshold just because of its source. The bonus is
+    deliberately small (<= 0.05) so among candidates that DO pass the
+    threshold, it can only break near-ties, never flip a real
+    semantic gap.
 
     Uses the same BAAI/bge-m3 embedding model as the existing
     SemanticSearchService.
     """
 
-    # Small, capped bonuses — not meant to compete with semantic
-    # similarity, only to nudge otherwise-close candidates toward
-    # more reliable sources.
     SOURCE_QUALITY_BONUS: dict[str, float] = {
         "goodreads": 0.05,
         "google books": 0.05,
@@ -31,8 +38,13 @@ class WebQuoteRanker:
     }
     DEFAULT_SOURCE_BONUS = 0.0
 
-    def __init__(self) -> None:
+    def __init__(self, min_similarity: float | None = None) -> None:
         self.embedding = EmbeddingService()
+        self.min_similarity = (
+            min_similarity
+            if min_similarity is not None
+            else settings.min_semantic_similarity
+        )
 
     def _source_bonus(self, source: str | None) -> float:
         if not source:
@@ -79,6 +91,13 @@ class WebQuoteRanker:
             # Embeddings are normalized, so dot product
             # is equivalent to cosine similarity.
             semantic_similarity = float(query_vector @ quote_vector)
+
+            # Threshold is applied to the RAW semantic similarity —
+            # a source bonus can never rescue a candidate that isn't
+            # actually relevant.
+            if semantic_similarity < self.min_similarity:
+                continue
+
             combined_score = semantic_similarity + self._source_bonus(
                 result.source
             )
@@ -90,6 +109,9 @@ class WebQuoteRanker:
                     }
                 )
             )
+
+        if not ranked:
+            return []
 
         ranked.sort(
             key=lambda item: (
