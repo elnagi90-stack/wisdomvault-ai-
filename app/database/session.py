@@ -18,7 +18,7 @@ def init_db(engine: Engine | None = None) -> None:
     Base.metadata.create_all(bind=target_engine)
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     session_factory = build_session_factory(create_engine_from_settings(Settings()))
     db = session_factory()
     try:

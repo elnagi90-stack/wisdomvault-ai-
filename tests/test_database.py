@@ -6,7 +6,9 @@ from app.database.session import build_session_factory, init_db
 from app.models import KnowledgeEntry
 
 
-def test_database_initializes_and_persists_entries(tmp_path: object, monkeypatch: object) -> None:
+def test_database_initializes_and_persists_entries(
+    tmp_path: object, monkeypatch: object
+) -> None:
     db_path = tmp_path / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
     monkeypatch.setenv("DATABASE_ENGINE", "sqlite")

@@ -17,6 +17,11 @@ def test_settings_loads_environment_values(monkeypatch: object) -> None:
     monkeypatch.setenv("DAILY_WISDOM_HOUR", "7")
     monkeypatch.setenv("SEARCH_ENGINE", "postgres")
     monkeypatch.setenv("AI_PROVIDER", "openai")
+    monkeypatch.setenv("CORS_ALLOW_ALL", "false")
+    monkeypatch.setenv(
+        "ALLOWED_ORIGINS", "https://app.example.com,https://admin.example.com"
+    )
+    monkeypatch.setenv("API_KEY", "test-api-key")
 
     settings = Settings(_env_file=None)
 
@@ -35,3 +40,9 @@ def test_settings_loads_environment_values(monkeypatch: object) -> None:
     assert settings.daily_wisdom_hour == 7
     assert settings.search_engine == "postgres"
     assert settings.ai_provider == "openai"
+    assert settings.cors_allow_all is False
+    assert settings.allowed_origins == [
+        "https://app.example.com",
+        "https://admin.example.com",
+    ]
+    assert settings.api_key == "test-api-key"

@@ -1,0 +1,258 @@
+﻿from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.ai.semantic_search_service import SemanticSearchService
+from app.core.dependencies import get_quote_service
+from app.schemas.quote import (
+    QuoteCreate,
+    QuoteResponse,
+    QuoteUpdate,
+)
+from app.services.quote_service import QuoteService
+
+router = APIRouter(
+    prefix="/quotes",
+    tags=["Quotes"],
+)
+
+
+@router.get(
+    "",
+    response_model=list[QuoteResponse],
+)
+def list_quotes(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    service: QuoteService = Depends(get_quote_service),
+):
+    return service.list_quotes(
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post(
+    "",
+    response_model=QuoteResponse,
+    status_code=201,
+)
+def create_quote(
+    payload: QuoteCreate,
+    service: QuoteService = Depends(get_quote_service),
+):
+    try:
+        return service.create_quote(
+            text=payload.text,
+            book_id=payload.book_id,
+            page_number=payload.page_number,
+            chapter=payload.chapter,
+            language=payload.language,
+            notes=payload.notes,
+            rating=payload.rating,
+            is_favorite=payload.is_favorite,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+
+@router.get(
+    "/random",
+    response_model=QuoteResponse,
+)
+def random_quote(
+    service: QuoteService = Depends(get_quote_service),
+):
+    quote = service.get_random_quote()
+
+    if quote is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No quotes found",
+        )
+
+    return quote
+
+
+@router.get(
+    "/favorites",
+    response_model=list[QuoteResponse],
+)
+def favorite_quotes(
+    service: QuoteService = Depends(get_quote_service),
+):
+    return service.get_favorites()
+
+
+@router.get(
+    "/book/{book_id}",
+    response_model=list[QuoteResponse],
+)
+def quotes_by_book(
+    book_id: str,
+    service: QuoteService = Depends(get_quote_service),
+):
+    return service.get_quotes_by_book(book_id)
+
+
+@router.get(
+    "/tag/{tag_name}",
+    response_model=list[QuoteResponse],
+)
+def quotes_by_tag(
+    tag_name: str,
+    service: QuoteService = Depends(get_quote_service),
+):
+    return service.get_quotes_by_tag(tag_name)
+
+
+@router.get(
+    "/search",
+    response_model=list[QuoteResponse],
+)
+def search_quotes(
+    keyword: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    service: QuoteService = Depends(get_quote_service),
+):
+    return service.search_quotes(
+        keyword=keyword,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/semantic-search",
+)
+def semantic_search(
+    query: str = Query(...),
+    k: int = Query(default=5, ge=1, le=50),
+    service: QuoteService = Depends(get_quote_service),
+):
+    semantic = SemanticSearchService(service.repository)
+    results = semantic.search(query, k=k)
+
+    return [
+        {
+            "score": item["score"],
+            "quote": QuoteResponse.model_validate(item["quote"]),
+        }
+        for item in results
+    ]
+
+
+@router.get(
+    "/{quote_id}",
+    response_model=QuoteResponse,
+)
+def get_quote(
+    quote_id: str,
+    service: QuoteService = Depends(get_quote_service),
+):
+    quote = service.get_quote(quote_id)
+
+    if quote is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Quote not found",
+        )
+
+    return quote
+
+
+@router.put(
+    "/{quote_id}",
+    response_model=QuoteResponse,
+)
+def update_quote(
+    quote_id: str,
+    payload: QuoteUpdate,
+    service: QuoteService = Depends(get_quote_service),
+):
+    try:
+        quote = service.update_quote(
+            quote_id,
+            payload,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    if quote is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Quote not found",
+        )
+
+    return quote
+
+
+@router.delete(
+    "/{quote_id}",
+)
+def delete_quote(
+    quote_id: str,
+    service: QuoteService = Depends(get_quote_service),
+):
+    deleted = service.delete_quote(quote_id)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Quote not found",
+        )
+
+    return {
+        "success": True,
+    }
+
+
+@router.post(
+    "/{quote_id}/tags/{tag_id}",
+    response_model=QuoteResponse,
+)
+def add_tag_to_quote(
+    quote_id: str,
+    tag_id: str,
+    service: QuoteService = Depends(get_quote_service),
+):
+    quote = service.add_tag_to_quote(
+        quote_id=quote_id,
+        tag_id=tag_id,
+    )
+
+    if quote is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Quote or tag not found",
+        )
+
+    return quote
+
+
+@router.delete(
+    "/{quote_id}/tags/{tag_id}",
+    response_model=QuoteResponse,
+)
+def remove_tag_from_quote(
+    quote_id: str,
+    tag_id: str,
+    service: QuoteService = Depends(get_quote_service),
+):
+    quote = service.remove_tag_from_quote(
+        quote_id=quote_id,
+        tag_id=tag_id,
+    )
+
+    if quote is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Quote not found",
+        )
+
+    return quote

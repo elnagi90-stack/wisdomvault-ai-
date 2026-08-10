@@ -5,7 +5,11 @@ from app.repositories.knowledge_repository import KnowledgeRepository, SupportsS
 
 
 class KnowledgeService:
-    def __init__(self, repository: KnowledgeRepository | None = None, session_factory: SupportsSession | None = None) -> None:
+    def __init__(
+        self,
+        repository: KnowledgeRepository | None = None,
+        session_factory: SupportsSession | None = None,
+    ) -> None:
         if repository is not None:
             self.repository = repository
         elif session_factory is not None:

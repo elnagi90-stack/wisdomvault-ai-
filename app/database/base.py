@@ -11,8 +11,13 @@ class Base(DeclarativeBase):
 
 
 def create_engine_from_settings(settings: Settings):
-    return create_engine(settings.database_url, echo=settings.debug)
+    return create_engine(
+        settings.database_url,
+        echo=settings.debug,
+        future=True,
+    )
 
 
-def init_db(engine) -> None:
+def init_db(engine):
+
     Base.metadata.create_all(bind=engine)
