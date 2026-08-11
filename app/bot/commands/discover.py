@@ -3,7 +3,9 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
+from app.ocr.engine import OcrEngineUnavailableError
 from app.schemas.web_search.quote import WebQuoteResult
+from app.services.ocr_service import OcrService, UnsupportedImageError
 from app.services.quote_service import QuoteService
 from app.services.web_search.service import WebSearchService
 
@@ -29,24 +31,19 @@ def _format_result(result: WebQuoteResult, index: int) -> str:
     return "\n".join(lines)
 
 
-async def find_similar(
+async def _search_and_reply(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
+    query_text: str,
 ) -> None:
+    """Shared by /findsimilar (text) and the photo/OCR flow — same
+    search call, same formatting, same Save buttons either way."""
     web_search_service: WebSearchService = context.bot_data["web_search_service"]
-
-    if not context.args:
-        await update.message.reply_text(
-            "استخدم الأمر بالشكل ده:\n/findsimilar نص الاقتباس اللي عايز تلاقي شبهه"
-        )
-        return
-
-    query = " ".join(context.args)
 
     await update.message.reply_text("🔎 بدور على اقتباسات مشابهة...")
 
     try:
-        results = web_search_service.search(query, limit=MAX_RESULTS)
+        results = web_search_service.search(query_text, limit=MAX_RESULTS)
     except Exception:
         await update.message.reply_text(
             "⚠️ حصلت مشكلة أثناء البحث، جرّب تاني كمان شوية."
@@ -57,9 +54,6 @@ async def find_similar(
         await update.message.reply_text("معلقتش على أي اقتباسات مشابهة، جرّب صياغة تانية.")
         return
 
-    # Stash the actual result objects in this chat's user_data so the
-    # "Save" button callback can look them up later — Telegram's
-    # callback_data has a tight byte limit, so we only send an index.
     pending: dict[str, WebQuoteResult] = {}
 
     for index, result in enumerate(results):
@@ -75,6 +69,61 @@ async def find_similar(
         )
 
     context.user_data["pending_web_quotes"] = pending
+
+
+async def find_similar(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    if not context.args:
+        await update.message.reply_text(
+            "استخدم الأمر بالشكل ده:\n/findsimilar نص الاقتباس اللي عايز تلاقي شبهه"
+        )
+        return
+
+    query = " ".join(context.args)
+
+    await _search_and_reply(update, context, query)
+
+
+async def handle_quote_photo(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """User sends a photo of a quote (book page, screenshot, etc.):
+    OCR extracts the text, then it's fed into the exact same
+    discovery pipeline as /findsimilar."""
+    ocr_service: OcrService = context.bot_data["ocr_service"]
+
+    photo = update.message.photo[-1]  # highest resolution available
+    telegram_file = await photo.get_file()
+    image_bytes = bytes(await telegram_file.download_as_bytearray())
+
+    await update.message.reply_text("🖼️ بستخرج النص من الصورة...")
+
+    try:
+        text, _saved_path = ocr_service.extract_text_from_image(
+            image_bytes,
+            content_type="image/jpeg",
+        )
+    except UnsupportedImageError as exc:
+        await update.message.reply_text(f"⚠️ {exc}")
+        return
+    except OcrEngineUnavailableError:
+        await update.message.reply_text(
+            "⚠️ خدمة استخراج النص مش شغالة دلوقتي، جرّب تاني بعدين."
+        )
+        return
+
+    if not text.strip():
+        await update.message.reply_text(
+            "معرفتش أستخرج نص من الصورة دي، جرّب صورة أوضح."
+        )
+        return
+
+    await update.message.reply_text(f"📝 النص اللي طلع من الصورة:\n«{text}»")
+
+    await _search_and_reply(update, context, text)
 
 
 async def save_web_quote_callback(

@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 from app.core.config import Settings
 from app.database.base import create_engine_from_settings, init_db
@@ -34,9 +34,13 @@ def test_storage_and_knowledge_services_work(
     assert storage.read_text("note.txt") == "hello"
 
     ai_service = AiService()
-    summary = ai_service.summarize("This is a long document about memory and learning")
+    summary = ai_service.summarize(
+        "This is a long document about memory and learning"
+    )
     assert "Summary" in summary
 
     ocr_service = OcrService()
     text = ocr_service.extract_text(b"fake-image-bytes")
-    assert "placeholder" in text.lower()
+
+    # Invalid image bytes should fail gracefully.
+    assert text == ""

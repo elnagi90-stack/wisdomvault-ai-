@@ -1,9 +1,19 @@
 ﻿from __future__ import annotations
 
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
 
 from app.bot.commands.books import add_book, my_books
-from app.bot.commands.discover import find_similar, save_web_quote_callback
+from app.bot.commands.discover import (
+    find_similar,
+    handle_quote_photo,
+    save_web_quote_callback,
+)
 from app.bot.commands.quotes import (
     add_quote,
     favorite_quote,
@@ -14,7 +24,9 @@ from app.bot.commands.quotes import (
 from app.core.config import Settings
 from app.database.base import create_engine_from_settings
 from app.database.session import build_session_factory
+from app.ocr.engine import EasyOcrEngine
 from app.services.book_service import BookService
+from app.services.ocr_service import OcrService
 from app.services.quote_service import QuoteService
 from app.services.web_search.service import WebSearchService
 
@@ -30,7 +42,8 @@ async def start_command(update, context) -> None:
         "/favorite <id> — إضافة اقتباس للمفضلة\n"
         "/addbook <عنوان> — إضافة كتاب\n"
         "/mybooks — كل الكتب\n"
-        "/findsimilar <نص> — لاقي اقتباسات مشابهة من الإنترنت"
+        "/findsimilar <نص> — لاقي اقتباسات مشابهة من الإنترنت\n"
+        "📷 ابعت صورة اقتباس — هستخرج النص ألاقيلك اقتباسات مشابهة"
     )
 
 
@@ -52,6 +65,7 @@ def build_bot_application(
     application.bot_data["quote_service"] = QuoteService(session_factory=session_factory)
     application.bot_data["book_service"] = BookService(session_factory=session_factory)
     application.bot_data["web_search_service"] = WebSearchService()
+    application.bot_data["ocr_service"] = OcrService(engine=EasyOcrEngine())
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("addquote", add_quote))
@@ -62,6 +76,7 @@ def build_bot_application(
     application.add_handler(CommandHandler("addbook", add_book))
     application.add_handler(CommandHandler("mybooks", my_books))
     application.add_handler(CommandHandler("findsimilar", find_similar))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_quote_photo))
     application.add_handler(
         CallbackQueryHandler(save_web_quote_callback, pattern=r"^save_web_quote:")
     )
