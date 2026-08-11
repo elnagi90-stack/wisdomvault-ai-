@@ -30,8 +30,9 @@ class EasyOcrEngine:
     are loaded by default.
     """
 
-    def __init__(self, languages: list[str] | None = None) -> None:
+    def __init__(self, languages: list[str] | None = None, gpu: bool = False) -> None:
         self.languages = languages or ["en", "ar"]
+        self.gpu = gpu
 
     def _get_reader(self):
         global _reader, _reader_unavailable_error
@@ -45,7 +46,7 @@ class EasyOcrEngine:
             try:
                 import easyocr
 
-                _reader = easyocr.Reader(self.languages, gpu=False)
+                _reader = easyocr.Reader(self.languages, gpu=self.gpu)
             except Exception as exc:  # pragma: no cover - environment-dependent
                 _reader_unavailable_error = exc
                 raise OcrEngineUnavailableError(

@@ -1,7 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from io import BytesIO
 from typing import Any, Sequence
+
+from app.interfaces.ocr_interface import OcrInterface
 
 from PIL import Image
 
@@ -23,7 +25,7 @@ class OcrService:
 
     def __init__(
         self,
-        engine: Any | None = None,
+        engine: OcrInterface | None = None,
         storage: Any | None = None,
         languages: Sequence[str] | None = None,
         gpu: bool = False,
