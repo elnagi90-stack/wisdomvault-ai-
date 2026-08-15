@@ -85,6 +85,17 @@ def get_notion_sync_service(session: Session = Depends(get_db)):
     )
 
 
+def get_ocr_service():
+    from app.ocr.engine import EasyOcrEngine
+    from app.services.ocr_service import OcrService
+    from app.services.storage_service import LocalStorageService
+
+    return OcrService(
+        engine=EasyOcrEngine(),
+        storage=LocalStorageService(),
+    )
+
+
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     session: Session = Depends(get_db),

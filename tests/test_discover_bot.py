@@ -183,3 +183,135 @@ async def test_save_web_quote_callback_surfaces_validation_errors() -> None:
 
     query.message.reply_text.assert_called_once()
     assert "Quote text cannot be empty" in query.message.reply_text.call_args[0][0]
+
+
+# ---- photo / OCR flow ----
+
+from app.bot.commands.discover import handle_quote_photo
+from app.ocr.engine import OcrEngineUnavailableError
+from app.services.ocr_service import UnsupportedImageError
+
+
+def _make_photo_update_and_context():
+    photo_file = MagicMock()
+    photo_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"jpeg-bytes"))
+
+    photo_size = MagicMock()
+    photo_size.get_file = AsyncMock(return_value=photo_file)
+
+    update = MagicMock()
+    update.message.photo = [photo_size]  # Telegram sends multiple sizes
+    update.message.reply_text = AsyncMock()
+
+    context = MagicMock()
+    context.user_data = {}
+    context.bot_data = {}
+
+    return update, context
+
+
+@pytest.mark.asyncio
+async def test_handle_quote_photo_extracts_text_and_searches() -> None:
+    update, context = _make_photo_update_and_context()
+
+    ocr_service = MagicMock()
+    ocr_service.extract_text_from_image.return_value = (
+        "The important thing is to never stop learning",
+        None,
+    )
+    context.bot_data["ocr_service"] = ocr_service
+
+    web_search_service = MagicMock()
+    web_search_service.search.return_value = [
+        WebQuoteResult(
+            text="Live as if you were to die tomorrow.",
+            author="Mahatma Gandhi",
+            source="Goodreads",
+            score=0.8,
+        )
+    ]
+    context.bot_data["web_search_service"] = web_search_service
+
+    await handle_quote_photo(update, context)
+
+    ocr_service.extract_text_from_image.assert_called_once()
+
+    web_search_service.search.assert_called_once_with(
+        "The important thing is to never stop learning",
+        limit=5,
+    )
+
+    messages = [call.args[0] for call in update.message.reply_text.call_args_list]
+    assert any("النص اللي طلع من الصورة" in m for m in messages)
+    assert any("Live as if you were to die tomorrow" in m for m in messages)
+
+
+@pytest.mark.asyncio
+async def test_handle_quote_photo_rejects_unsupported_image() -> None:
+    update, context = _make_photo_update_and_context()
+
+    ocr_service = MagicMock()
+    ocr_service.extract_text_from_image.side_effect = UnsupportedImageError(
+        "Image is too large (max 10 MB)."
+    )
+    context.bot_data["ocr_service"] = ocr_service
+    context.bot_data["web_search_service"] = MagicMock()
+
+    await handle_quote_photo(update, context)
+
+    messages = [call.args[0] for call in update.message.reply_text.call_args_list]
+    assert any("Image is too large" in m for m in messages)
+    context.bot_data["web_search_service"].search.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_quote_photo_handles_engine_unavailable() -> None:
+    update, context = _make_photo_update_and_context()
+
+    ocr_service = MagicMock()
+    ocr_service.extract_text_from_image.side_effect = OcrEngineUnavailableError(
+        "EasyOCR could not be loaded."
+    )
+    context.bot_data["ocr_service"] = ocr_service
+    context.bot_data["web_search_service"] = MagicMock()
+
+    await handle_quote_photo(update, context)
+
+    messages = [call.args[0] for call in update.message.reply_text.call_args_list]
+    assert any("مش شغالة" in m for m in messages)
+    context.bot_data["web_search_service"].search.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_quote_photo_handles_empty_extraction() -> None:
+    update, context = _make_photo_update_and_context()
+
+    ocr_service = MagicMock()
+    ocr_service.extract_text_from_image.return_value = ("   ", None)
+    context.bot_data["ocr_service"] = ocr_service
+    context.bot_data["web_search_service"] = MagicMock()
+
+    await handle_quote_photo(update, context)
+
+    messages = [call.args[0] for call in update.message.reply_text.call_args_list]
+    assert any("معرفتش أستخرج نص" in m for m in messages)
+    context.bot_data["web_search_service"].search.assert_not_called()
+
+
+def test_build_bot_application_wires_ocr_service() -> None:
+    from app.bot.factory import build_bot_application
+
+    app = build_bot_application(token="test-token")
+    assert "ocr_service" in app.bot_data
+
+
+def test_build_bot_application_registers_photo_handler() -> None:
+    from app.bot.factory import build_bot_application
+
+    app = build_bot_application(token="test-token")
+
+    handler_types = [
+        type(h).__name__ for group in app.handlers.values() for h in group
+    ]
+
+    assert "MessageHandler" in handler_types
