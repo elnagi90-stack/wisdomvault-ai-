@@ -7,29 +7,34 @@ from bs4 import BeautifulSoup
 
 class QuoteExtractor:
     """
-    Extract quote-like passages from text and HTML.
+    Extract quote-like passages from already-fetched page content.
 
-    This class does not perform web requests.
-    It receives page content and returns candidate quotes.
+    This extractor does not perform network requests.
     """
-
-    _DOUBLE_QUOTE_PATTERN = re.compile(
-        r'"([^"\n]+)"'
-    )
-
-    _SINGLE_QUOTE_PATTERN = re.compile(
-        r"'([^'\n]+)'"
-    )
 
     MIN_QUOTE_WORDS = 3
     MAX_QUOTE_WORDS = 80
+
+    _DOUBLE_QUOTE_PATTERNS = (
+        re.compile(r'"([^"\n]{10,})"'),
+        re.compile(r"\u201c([^\u201d\n]{10,})\u201d"),
+    )
+
+    _SINGLE_QUOTE_PATTERNS = (
+        re.compile(r"'([^'\n]{10,})'"),
+        re.compile(r"\u2018([^\u2019\n]{10,})\u2019"),
+    )
+
+    _TRUNCATION_MARKERS = (
+        "...",
+        "\u2026",
+    )
 
     def extract(
         self,
         text: str,
         limit: int = 10,
     ) -> list[str]:
-
         text = text.strip()
 
         if not text or limit < 1:
@@ -37,15 +42,14 @@ class QuoteExtractor:
 
         candidates: list[str] = []
 
-        candidates.extend(
-            match.group(1)
-            for match in self._DOUBLE_QUOTE_PATTERN.finditer(text)
-        )
-
-        candidates.extend(
-            match.group(1)
-            for match in self._SINGLE_QUOTE_PATTERN.finditer(text)
-        )
+        for pattern in (
+            *self._DOUBLE_QUOTE_PATTERNS,
+            *self._SINGLE_QUOTE_PATTERNS,
+        ):
+            candidates.extend(
+                match.group(1)
+                for match in pattern.finditer(text)
+            )
 
         return self._clean_candidates(
             candidates,
@@ -57,7 +61,6 @@ class QuoteExtractor:
         html: str,
         limit: int = 10,
     ) -> list[str]:
-
         html = html.strip()
 
         if not html or limit < 1:
@@ -70,7 +73,7 @@ class QuoteExtractor:
 
         candidates: list[str] = []
 
-        for element in soup.select("blockquote"):
+        for element in soup.select("blockquote, q"):
             text = element.get_text(
                 " ",
                 strip=True,
@@ -78,6 +81,18 @@ class QuoteExtractor:
 
             if text:
                 candidates.append(text)
+
+        visible_text = soup.get_text(
+            " ",
+            strip=True,
+        )
+
+        candidates.extend(
+            self.extract(
+                visible_text,
+                limit=limit,
+            )
+        )
 
         return self._clean_candidates(
             candidates,
@@ -89,12 +104,10 @@ class QuoteExtractor:
         candidates: list[str],
         limit: int,
     ) -> list[str]:
-
         results: list[str] = []
         seen: set[str] = set()
 
         for candidate in candidates:
-
             cleaned = " ".join(
                 candidate.split()
             ).strip()
@@ -110,6 +123,15 @@ class QuoteExtractor:
             if word_count > self.MAX_QUOTE_WORDS:
                 continue
 
+            if any(
+                marker in cleaned
+                for marker in self._TRUNCATION_MARKERS
+            ):
+                continue
+
+            if self._looks_like_navigation(cleaned):
+                continue
+
             normalized = cleaned.lower()
 
             if normalized in seen:
@@ -122,3 +144,17 @@ class QuoteExtractor:
                 break
 
         return results
+
+    @staticmethod
+    def _looks_like_navigation(text: str) -> bool:
+        lowered = text.lower()
+
+        bad_starts = (
+            "click here",
+            "read more",
+            "sign up",
+            "log in",
+            "subscribe",
+        )
+
+        return lowered.startswith(bad_starts)

@@ -5,12 +5,20 @@ from unittest.mock import Mock
 from app.schemas.web_search.quote import WebQuoteResult
 from app.services.web_search.service import WebSearchService
 from app.services.web_search.metadata.extractor import PageMetadata
+from app.services.web_search.page_extractor import WebPageContent
 
 
 def _provider(*results: WebQuoteResult) -> Mock:
     provider = Mock()
     provider.search.return_value = list(results)
     return provider
+
+
+def _page(text: str) -> WebPageContent:
+    return WebPageContent(
+        html=text,
+        text=text,
+    )
 
 
 def test_search_extracts_quotes_from_discovered_pages() -> None:
@@ -24,8 +32,8 @@ def test_search_extracts_quotes_from_discovered_pages() -> None:
 
     service = WebSearchService(providers=[provider])
 
-    service.page_extractor.extract = Mock(
-        return_value=(
+    service.page_extractor.extract_content = Mock(
+        return_value=_page(
             '"The best way to predict the future is to create it." '
             'Some unrelated page text.'
         )
@@ -48,7 +56,7 @@ def test_search_extracts_quotes_from_discovered_pages() -> None:
     assert results[0].url == "https://example.com/article"
 
 
-def test_search_preserves_provider_result_when_page_extraction_fails() -> None:
+def test_search_does_not_preserve_unverified_provider_result_when_page_extraction_fails() -> None:
     provider = _provider(
         WebQuoteResult(
             text="Knowledge speaks, wisdom listens",
@@ -60,7 +68,9 @@ def test_search_preserves_provider_result_when_page_extraction_fails() -> None:
 
     service = WebSearchService(providers=[provider])
 
-    service.page_extractor.extract = Mock(return_value="")
+    service.page_extractor.extract_content = Mock(
+        return_value=None
+    )
 
     service.ranker.rank = Mock(
         side_effect=lambda query, results, limit: results[:limit]
@@ -71,10 +81,7 @@ def test_search_preserves_provider_result_when_page_extraction_fails() -> None:
         limit=10,
     )
 
-    assert len(results) == 1
-    assert results[0].text == "Knowledge speaks, wisdom listens"
-    assert results[0].author == "Jimi Hendrix"
-    assert results[0].source == "Google Search"
+    assert results == []
 
 
 def test_search_deduplicates_extracted_quotes() -> None:
@@ -93,10 +100,10 @@ def test_search_deduplicates_extracted_quotes() -> None:
 
     service = WebSearchService(providers=[provider])
 
-    service.page_extractor.extract = Mock(
+    service.page_extractor.extract_content = Mock(
         side_effect=[
-            '"The same wisdom applies everywhere."',
-            '"The same wisdom applies everywhere."',
+            _page('"The same wisdom applies everywhere."'),
+            _page('"The same wisdom applies everywhere."'),
         ]
     )
 
@@ -124,8 +131,8 @@ def test_search_respects_limit_after_ranking() -> None:
 
     service = WebSearchService(providers=[provider])
 
-    service.page_extractor.extract = Mock(
-        return_value=(
+    service.page_extractor.extract_content = Mock(
+        return_value=_page(
             '"First meaningful quotation here." '
             '"Second meaningful quotation here." '
             '"Third meaningful quotation here."'
@@ -165,8 +172,10 @@ def test_search_survives_provider_failure() -> None:
         ]
     )
 
-    service.page_extractor.extract = Mock(
-        return_value='"A useful quotation from a page."'
+    service.page_extractor.extract_content = Mock(
+        return_value=_page(
+            '"A useful quotation from a page."'
+        )
     )
 
     service.ranker.rank = Mock(
@@ -193,8 +202,10 @@ def test_search_passes_query_to_ranker() -> None:
 
     service = WebSearchService(providers=[provider])
 
-    service.page_extractor.extract = Mock(
-        return_value='"A meaningful quote for testing."'
+    service.page_extractor.extract_content = Mock(
+        return_value=_page(
+            '"A meaningful quote for testing."'
+        )
     )
 
     service.ranker.rank = Mock(
@@ -213,6 +224,7 @@ def test_search_passes_query_to_ranker() -> None:
     assert call.kwargs["query"] == "meaningful quote"
     assert call.kwargs["limit"] == 5
 
+
 def test_search_uses_page_metadata_for_extracted_quote() -> None:
     provider = _provider(
         WebQuoteResult(
@@ -226,8 +238,14 @@ def test_search_uses_page_metadata_for_extracted_quote() -> None:
 
     service = WebSearchService(providers=[provider])
 
-    service.page_extractor.extract = Mock(
-        return_value='"The important thing is to never stop learning."'
+    service.page_extractor.extract_content = Mock(
+        return_value=_page(
+            '"The important thing is to never stop learning."'
+        )
+    )
+
+    service.quote_extractor.extract_html = Mock(
+        return_value=[]
     )
 
     service.quote_extractor.extract = Mock(
@@ -262,15 +280,17 @@ def test_search_uses_page_metadata_for_extracted_quote() -> None:
     assert results[0].source == "Google Search"
     assert results[0].url == "https://example.com/quote"
 
+
 def test_search_queries_providers_with_each_generated_query() -> None:
-    """Query expansion must actually reach the providers, not just
-    exist unused — this is the same class of bug as the earlier
-    PageMetadataExtractor-never-called issue."""
     provider = _provider(
-        WebQuoteResult(text="Some canned quote", source="Goodreads")
+        WebQuoteResult(
+            text="Some canned quote",
+            source="Goodreads",
+        )
     )
 
     service = WebSearchService(providers=[provider])
+
     service.ranker.rank = Mock(
         side_effect=lambda query, results, limit: results[:limit]
     )
@@ -281,14 +301,14 @@ def test_search_queries_providers_with_each_generated_query() -> None:
     )
 
     queried_terms = [
-        call.args[0] for call in provider.search.call_args_list
+        call.args[0]
+        for call in provider.search.call_args_list
     ]
 
-    # More than one distinct query string must have reached the
-    # provider — otherwise query expansion isn't really wired in.
     assert len(set(queried_terms)) > 1
     assert any(
-        "never stop learning" in term.lower() for term in queried_terms
+        "never stop learning" in term.lower()
+        for term in queried_terms
     )
 
 
@@ -298,14 +318,29 @@ def test_search_isolates_failures_per_query_and_provider() -> None:
     flaky_provider = Mock()
     flaky_provider.search.side_effect = [
         RuntimeError("network blip"),
-        [WebQuoteResult(text="Recovered on the next query", source="Bing")],
+        [
+            WebQuoteResult(
+                text="Recovered on the next query",
+                source="Bing",
+                url="https://example.com/recovered",
+            )
+        ],
         RuntimeError("network blip again"),
         [],
         [],
         [],
     ]
 
-    service = WebSearchService(providers=[flaky_provider])
+    service = WebSearchService(
+        providers=[flaky_provider]
+    )
+
+    service.page_extractor.extract_content = Mock(
+        return_value=_page(
+            '"Recovered on the next query."'
+        )
+    )
+
     service.ranker.rank = Mock(
         side_effect=lambda query, results, limit: results[:limit]
     )
@@ -316,5 +351,6 @@ def test_search_isolates_failures_per_query_and_provider() -> None:
     )
 
     assert any(
-        r.text == "Recovered on the next query" for r in results
+        result.text == "Recovered on the next query."
+        for result in results
     )
