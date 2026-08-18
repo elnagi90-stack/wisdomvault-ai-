@@ -56,6 +56,30 @@ class AiService:
 
         return "Summary: " + " ".join(selected)
 
+    def select_representative(
+        self,
+        passages: list[str],
+        max_passages: int = 5,
+    ) -> list[str]:
+        """Picks the most representative passages from a list of
+        already-discrete text units (e.g. a user's saved quotes from
+        one book), using the same local centrality scoring as
+        summarize() -- but without sentence-splitting, since each
+        passage is already a complete unit and shouldn't be merged
+        or split.
+
+        Returns the selected passages in their original input order.
+        """
+        cleaned = [p.strip() for p in passages if p and p.strip()]
+
+        if not cleaned:
+            return []
+
+        if len(cleaned) <= max_passages:
+            return cleaned
+
+        return self._select_central_sentences(cleaned, max_passages)
+
     def _select_central_sentences(
         self,
         sentences: list[str],

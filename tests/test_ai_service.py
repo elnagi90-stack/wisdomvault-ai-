@@ -119,3 +119,58 @@ def test_summarize_falls_back_gracefully_when_embeddings_unavailable() -> None:
     assert result.startswith("Summary: ")
     assert sentences[0] in result
     assert sentences[1] in result
+
+
+# ---- select_representative (used for per-book quote highlights) ----
+
+def test_select_representative_returns_all_when_under_the_limit() -> None:
+    service = AiService()
+    passages = ["First quote.", "Second quote."]
+
+    result = service.select_representative(passages, max_passages=5)
+
+    assert result == passages
+
+
+def test_select_representative_drops_empty_and_blank_passages() -> None:
+    service = AiService()
+    passages = ["A real quote here.", "", "   ", "Another real quote."]
+
+    result = service.select_representative(passages, max_passages=5)
+
+    assert result == ["A real quote here.", "Another real quote."]
+
+
+def test_select_representative_picks_central_passages_in_original_order() -> None:
+    service = AiService()
+
+    passages = [
+        "Cats are wonderful pets that bring joy every day.",
+        "Cars need regular maintenance to keep running well.",
+        "Many people love cats for their independent nature.",
+        "Cats also make great companions for elderly people.",
+    ]
+
+    vectors = np.array(
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [0.95, 0.05],
+            [0.9, 0.1],
+        ],
+        dtype="float32",
+    )
+
+    with patch(
+        "app.ai.embedding_service.EmbeddingService.encode_many",
+        return_value=vectors,
+    ):
+        result = service.select_representative(passages, max_passages=2)
+
+    assert passages[1] not in result
+    assert result.index(passages[0]) < result.index(passages[2])
+
+
+def test_select_representative_empty_list_returns_empty() -> None:
+    service = AiService()
+    assert service.select_representative([], max_passages=5) == []
